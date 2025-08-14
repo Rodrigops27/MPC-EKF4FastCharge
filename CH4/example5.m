@@ -44,20 +44,20 @@ else % load the already-created ROM
   load(ROMfile,'ROM');
 end
 
-simData.Ts = 1;
-simData.time = 0:1:3000;
+simData.Ts = 1; finalTime = 3600;
+simData.time = 0:1:finalTime;
 simData.SOC0 = 10;
-simData.T = 25*ones(3001,1);
+simData.T = 25*ones(finalTime+1, 1);
 simData.warnOff = 1;
 
 %% CCCV sim
-simData.Iapp = -30*ones(3001,1);
+simData.Iapp = -30*ones(finalTime+1, 1);
 simData.Papp = 0*simData.Iapp;
 ROMout = simROM(ROM,simData,'outBlend',3.0,4.15,0);
 save(ROM_CCCV,'ROMout');
 
 %% CPCV sim
-simData.Papp = -115*ones(3001,1);
+simData.Papp = -115*ones(finalTime+1, 1);
 simData.Iapp = 0*simData.Papp;
 ROMout = simROM(ROM,simData,'outBlend',3.0,4.15,1);
 save(ROM_CPCV,'ROMout');
