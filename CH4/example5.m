@@ -1,6 +1,6 @@
 % This example reproduces results from section 4.10 of the book. It
 % simulates the CC/CV and CP/CV charging-example results.
-% 
+
 % Copyright (©) 2024 The Regents of the University of Colorado, a body
 % corporate. Created by Gregory L. Plett and M. Scott Trimboli of the
 % University of Colorado Colorado Springs (UCCS). This work is licensed
@@ -44,14 +44,15 @@ else % load the already-created ROM
   load(ROMfile,'ROM');
 end
 
-%% CCCV sim
 simData.Ts = 1;
 simData.time = 0:1:3000;
-simData.SOC0 = 50;
-simData.Iapp = -30*ones(3001,1);
+simData.SOC0 = 10;
 simData.T = 25*ones(3001,1);
-simData.Papp = 0*simData.Iapp;
 simData.warnOff = 1;
+
+%% CCCV sim
+simData.Iapp = -30*ones(3001,1);
+simData.Papp = 0*simData.Iapp;
 ROMout = simROM(ROM,simData,'outBlend',3.0,4.15,0);
 save(ROM_CCCV,'ROMout');
 
