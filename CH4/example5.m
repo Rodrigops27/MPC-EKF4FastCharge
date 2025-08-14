@@ -53,7 +53,7 @@ simData.warnOff = 1;
 %% CCCV sim
 simData.Iapp = -30*ones(finalTime+1, 1);
 simData.Papp = 0*simData.Iapp;
-ROMout = simROM(ROM,simData,'outBlend',3.0,4.15,0);
+ROMout = simROM(ROM, simData, 'mdlBlend', 3.0, 4.15, 0);
 save(ROM_CCCV,'ROMout');
 
 %% CPCV sim
