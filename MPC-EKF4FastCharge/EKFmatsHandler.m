@@ -77,18 +77,18 @@ function MPC = EKFmatsHandler(ekfData, Xind, zk, Tk)
     MPC.Cv   = [Cv,  Dv];           MPC.Dv   = 0;
     MPC.Cphi = [Cphi, Dphi];        MPC.Dphi = 0;
 
-    % initial augmented state for RHS terms (x_k; u_k)
-    if isfield(ekfData,'xhat')
-        xk = ekfData.xhat(:);
-    else
-        % fallback: weighted average of neighbor xhats if present
-        xk = zeros(n,1);
-        for kk=1:4
-            if isfield(ekfData.M(Xind.theT(kk),Xind.theZ(kk)), 'xhat')
-                xk = xk + w(kk) * ekfData.M(Xind.theT(kk),Xind.theZ(kk)).xhat(:);
-            end
-        end
-    end
+    % % initial augmented state for RHS terms (x_k; u_k)
+    % if isfield(ekfData,'xhat')
+    %     xk = ekfData.xhat(:);
+    % else
+    %     % fallback: weighted average of neighbor xhats if present
+    %     xk = zeros(n,1);
+    %     for kk=1:4
+    %         if isfield(ekfData.M(Xind.theT(kk),Xind.theZ(kk)), 'xhat')
+    %             xk = xk + w(kk) * ekfData.M(Xind.theT(kk),Xind.theZ(kk)).xhat(:);
+    %         end
+    %     end
+    % end
     % uk = mpcData.uk_1;
     % MPC.x_aug_k = [xk; uk];
 end
