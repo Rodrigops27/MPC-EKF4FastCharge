@@ -1,4 +1,28 @@
 function mpcData = initMPC(SOC0,Np,Nc,targetSOC,Nsim,ROM)
+% INITMPC  Initialize MPC controller data structure.
+%
+% Inputs
+%   SOC0       : initial SOC (percent or fraction; be consistent with the rest of the code)
+%   Np         : prediction horizon (integer)
+%   Nc         : control horizon (integer)
+%   targetSOC  : terminal SOC reference (same units as SOC0)
+%
+%                .Nsim          : total sim steps (optional; stored for convenience)
+%
+% Outputs
+%   mpcData : controller structure with fields
+%             .Np, .Nc, .Ts, .ref, .Sigma
+%             .Q, .Ru
+%             .const.constraints, .const.(limits...)
+%             .maxHild, .lambda
+%             .uk_1, .SOCk_1, .xk_1, .DUk_1
+%             .pred.u.Cu (and step-built .pred.soc/.pred.v/.pred.eta)
+%
+% Notes
+%   - Sign convention: charging current is negative. Set u_min to the most
+%     negative current you allow (max charge magnitude), and u_max typically 0 A.
+%   - This function does not build prediction matrices; those are populated
+%     each step in the run loop (after EKF blending) and stored in mpcData.pred.*.
 
 % Establish MPC tuning parameters:
 mpcData.Np = Np;            % Prediction horizon
