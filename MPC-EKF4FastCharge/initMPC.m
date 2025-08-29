@@ -1,4 +1,4 @@
-function mpcData = initMPC(SOC0,Np,Nc,targetSOC,Nsim,ROM)
+function mpcData = initMPC(SOC0,Np,Nc,targetSOC,Nsim,ROM,constraints)
 % INITMPC  Initialize MPC controller data structure.
 %
 % Inputs
@@ -17,31 +17,29 @@ function mpcData = initMPC(SOC0,Np,Nc,targetSOC,Nsim,ROM)
 %             .maxHild, .lambda
 %             .uk_1, .SOCk_1, .xk_1, .DUk_1
 %             .pred.u.Cu (and step-built .pred.soc/.pred.v/.pred.eta)
-%
-% Notes
-%   - Sign convention: charging current is negative. Set u_min to the most
-%     negative current you allow (max charge magnitude), and u_max typically 0 A.
-%   - This function does not build prediction matrices; those are populated
-%     each step in the run loop (after EKF blending) and stored in mpcData.pred.*.
 
 % Establish MPC tuning parameters:
 mpcData.Np = Np;            % Prediction horizon
 mpcData.Nc = Nc;            % Control horizon
+mpcData.Ts = 1;             % Sampling interval [sec]
 mpcData.ref = targetSOC;    % Target value for final SOC
-
-mpcData.Sigma = tril(ones(mpcData.Nc,mpcData.Nc));
+mpcData.Sigma  = tril(ones(Nc)); % accumulator (often used in cost/constraints)
 mpcData.Nsim = Nsim;        % Number of simulation points
 
+% ---- Weights
+mpcData.Q      = Q;
+mpcData.Ru     = eye(Nc); % Example
+
+% ---- Solver defaults / warm starts
+mpcData.maxHild = 100;      % Maximum iterations for Hildreth
+mpcData.lambda = [];
 mpcData.uk_1 = 0;           % Initialization value
 mpcData.SOCk_1 = 0;        
 mpcData.DUk_1 = 0;
-
-mpcData.maxHild = 100;      % Maximum iterations for Hildreth
-mpcData.lambda = [];       
 mpcData.SOC0 = SOC0;        % Initialization value
-mpcData.Ts = 1;             % Sampling interval [sec]
+% mpcData.SOCk_1  = SOC0;                % last SOC
 
-Crate = 10; % Max Crate TBD
+% Crate = 10; % Max Crate TBD
 Iapp_max = -ROM.cellData.function.const.Q(0.5)*Crate; % Max current
 Iapp_min = 0;
 
