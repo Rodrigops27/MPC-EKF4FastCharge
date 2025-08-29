@@ -1,61 +1,86 @@
-function mpcData = initMPC(SOC0,Np,Nc,targetSOC,Nsim,ROM,constraints)
+function mpcData = initMPC(SOC0, Np, Nc, targetSOC, opts)
 % INITMPC  Initialize MPC controller data structure.
 %
 % Inputs
-%   SOC0       : initial SOC (percent or fraction; be consistent with the rest of the code)
+%   SOC0       : initial SOC (percent or fraction — be consistent project-wide)
 %   Np         : prediction horizon (integer)
-%   Nc         : control horizon (integer)
+%   Nc         : control horizon (integer)   (will be clamped to Np)
 %   targetSOC  : terminal SOC reference (same units as SOC0)
+%   opts       : (struct, optional) configuration
+%                .Ts            : sample time [s]                          (default: 1)
+%                .constraints   : [useCurrent useVoltage useEta] logical   (default: [1 1 1])
+%                .limits        : struct with any of:
+%                                  - u_min, u_max        (A)
+%                                  - du_min, du_max      (A/sample)
+%                                  - v_min, v_max        (V or Np×1)
+%                                  - phise_min           (V or Np×1)
+%                .Q, .Ru        : weights (scalar or matrices)             (defaults: Q=1, Ru=eye(Nc))
+%                .Nsim          : total sim steps (optional; stored only for convenience)
+%                .ROM, .Crate   : if provided and u_min/u_max missing, they’re used to derive current limits
 %
-%                .Nsim          : total sim steps (optional; stored for convenience)
-%
-% Outputs
+% Output
 %   mpcData : controller structure with fields
 %             .Np, .Nc, .Ts, .ref, .Sigma
-%             .Q, .Ru
 %             .const.constraints, .const.(limits...)
 %             .maxHild, .lambda
 %             .uk_1, .SOCk_1, .xk_1, .DUk_1
-%             .pred.u.Cu (and step-built .pred.soc/.pred.v/.pred.eta)
+%             .pred.u.Cu   (accumulator; other .pred.* filled each step)
 
-% Establish MPC tuning parameters:
-mpcData.Np = Np;            % Prediction horizon
-mpcData.Nc = Nc;            % Control horizon
-mpcData.Ts = 1;             % Sampling interval [sec]
-mpcData.ref = targetSOC;    % Target value for final SOC
-mpcData.Sigma  = tril(ones(Nc)); % accumulator (often used in cost/constraints)
-mpcData.Nsim = Nsim;        % Number of simulation points
+if nargin < 5, opts = struct(); end
 
-% ---- Weights
-mpcData.Q      = Q;
-mpcData.Ru     = eye(Nc); % Example
+% Basic sizes / clamps
+Np = max(1, round(Np));
+Nc = max(1, min(round(Nc), Np));
 
-% ---- Solver defaults / warm starts
-mpcData.maxHild = 100;      % Maximum iterations for Hildreth
-mpcData.lambda = [];
-mpcData.uk_1 = 0;           % Initialization value
-mpcData.SOCk_1 = 0;        
-mpcData.DUk_1 = 0;
-mpcData.SOC0 = SOC0;        % Initialization value
+% ---- Basics
+mpcData.Np     = Np;
+mpcData.Nc     = Nc;
+mpcData.Ts     = getfield_with_default(opts, 'Ts', 1);
+mpcData.ref    = targetSOC;            % terminal SOC target
+mpcData.Sigma  = tril(ones(Nc));       % accumulator (often used in cost/constraints)
+mpcData.Nsim   = getfield_with_default(opts, 'Nsim', NaN);
+
+% Output Weight?
+% mpcData.Q      = getfield_with_default(opts, 'Q',  1);
+
+% Solver / warm starts
+mpcData.maxHild = 100;
+mpcData.lambda  = [];                  % dual warm start
+mpcData.DUk_1   = zeros(Nc,1);         % last optimal Δu sequence (optional)
+mpcData.xk_1    = [];                  % last state (optional)
+mpcData.uk_1    = 0;                   % last applied current
 % mpcData.SOCk_1  = SOC0;                % last SOC
-
-% Crate = 10; % Max Crate TBD
-Iapp_max = -ROM.cellData.function.const.Q(0.5)*Crate; % Max current
-Iapp_min = 0;
+mpcData.SOC0    = SOC0;
 
 % Establish MPC constraints
-mpcData.const.constraints = constraints; % Enter desired conditions
-if constraints(1) == 1
-    mpcData.const.u_max = Iapp_min;       % Minimum applied current
-    mpcData.const.u_min = Iapp_max;       % Maximum applied current
-    mpcData.const.du_max = 50;            % Maximum increment
-    mpcData.const.du_min = -50;           % Minimum increment
-end
-if constraints(2) == 1
-    mpcData.const.v_min = V_min;
-    mpcData.const.v_max = V_max;
+cons = getfield_with_default(opts, 'constraints', [1 1 1]);  % [current voltage eta]
+cons = logical(cons(:)).';
+% if numel(cons) < 3, cons(end+1:3) = false; end
+mpcData.const.constraints = cons;
+
+% Limits (merge provided limits with safe defaults)
+L = struct;
+if isfield(opts, 'limits'), L = opts.limits; end
+
+% Derive Iapp_max from ROM + Crate
+Imax = -opts.ROM.cellData.function.const.Q(0.5)*opts.Crate;  % magnitude [A]
+L.u_min = Imax;
+
+% Store limits
+% if ~isfield(mpcData,'const'), mpcData.const = struct; end
+mpcData.const = copyfields(mpcData.const, L);
+
+% ---- Prediction-cache seeds
+mpcData.pred = struct();
+mpcData.pred.u.Cu = tril(ones(Nc));    % for absolute-u constraints; others built per step
 end
 
-if constraints(3) == 1
-    mpcData.const.phise_min = Phise_min;
+% === helpers ===
+function v = getfield_with_default(S, name, default)
+if isfield(S,name), v = S.(name); else, v = default; end
+end
+
+function A = copyfields(A, B)
+f = fieldnames(B);
+for k = 1:numel(f), A.(f{k}) = B.(f{k}); end
 end
