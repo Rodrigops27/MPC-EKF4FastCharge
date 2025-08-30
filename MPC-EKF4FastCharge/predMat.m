@@ -1,101 +1,54 @@
-function [Phi, G] = predMat(A, B, C, D, Np, Nc)
-% PREDMAT  Build prediction matrices for y = Phi*x + G*DU
-% A,B,C,D : discrete-time, augmented (e.g., x_aug=[x;u])
-% Np,Nc   : prediction & control horizons
-%
-% Works for scalar/multi-output C, and any state size.
-% Robust to ill-conditioning: avoids large explicit kron/Toeplitz builds.
+function [Phi, G, aug] = predMat(A, B, C, D, Np, Nc)
+% PREDMAT  Build prediction matrices for y = Phi*x_aug + G*ΔU
+% Inputs
+%   A (nx×nx), B (nx×m), C (q×nx), D (q×m)  : discrete-time model
+%   Np, Nc                                   : prediction/control horizons
+% Output
+%   Phi (q*Np × (nx+m))                      : stacked output map
+%   G   (q*Np × (m*Nc))                      : block Toeplitz from impulse response
+%   aug : struct with fields A,B,C and sizes (nx_aug, m, q)
 
-nx = size(A,1);
-ny = size(C,1);
+    % ---- sizes & clamps ----
+    nx = size(A,1);
+    m  = size(B,2);
+    q  = size(C,1);
+    Np = max(1, round(Np));
+    Nc = max(1, min(round(Nc), Np));
 
-% Clamp Nc to Np
-Nc = min(Nc, Np);
+    % ---- Δu augmentation ----
+    % x_aug = [x; u],  Δu is input
+    Abar = [A, B; zeros(m,nx), eye(m)];
+    Bbar = [zeros(nx,m); eye(m)];
+    Cbar = [C, D];             % feed-through carried in augmented C
 
-% Preallocate
-Phi = zeros(ny*Np, nx);
-G   = zeros(ny*Np, Nc);
+    nx_aug = nx + m;
 
-% Running powers of A (safe single pass)
-A_pow = eye(nx);
+    % ---- preallocate ----
+    Phi = zeros(q*Np, nx_aug);
+    G   = zeros(q*Np, m*Nc);
 
-% Column blocks for G (impulse response of (A,B) mapped by C)
-%   y[k+i|k] = C*A^i x[k] + sum_{j=0}^{i-1} C*A^{i-1-j}*B * DU[k+1+j] +
-% (C*A^{i-1}*B + D)*u_k  (if not augmented)  TBD
-% In Δu + augmented-state design, D is typically 0; we keep it anyway.
-gcol = cell(Nc,1);
-for j = 1:Nc
-    gcol{j} = zeros(ny*Np,1);
-end
-
-for i = 1:Np
-    % Top block row index for this i
-    r = (i-1)*ny + (1:ny);
-
-    % Phi block row
-    A_pow = A_pow * A;        % A^i
-    Phi(r,:) = C * A_pow;     % C*A^i
-
-    % Fill G block row with C*A^{i-1-j}*B terms
-    Ap = eye(nx);             % A^{i-1-j} as we move across j
-    for j = 1:min(i,Nc)
-        if j==1
-            Ap = eye(nx);     % when i-1-j = i-2,... handled below
-        end
-        % For position (i,j): exponent is (i-1)-(j-1) = i-j
-        % We'll compute A^(i-j) by multiplying once per loop
-        if j==1
-            Aij = A_pow / A;  % A^(i-1)
-        else
-            Aij = Aij / A;    % step back one power: A^(i-j)
-        end
-
-        g = C * (Aij * B);    % ny x 1 (nu=1)
-        G(r,j) = g;
+    % ---- precompute impulse sequence H_k = Cbar*Abar^k*Bbar, k=0..Np-1 ----
+    H = cell(Np,1);
+    X = Bbar;                   % Abar^0*Bbar
+    for k = 1:Np
+        H{k} = Cbar * X;        % q×m
+        X    = Abar * X;        % advance: X := Abar^(k)*Bbar
     end
-end
 
-% If D ≠ 0 and you are NOT using input augmentation, the prediction law
-% would include a bias term that depends on u_k. In your Δu+augmented
-% design we expect D = 0 (or absorbed in the augmentation), so nothing to add.
-
-useAug = (nargin>=4) && any(abs(D(:))>1e-10);
-if useAug
-    % Augmented (recommended)
-    n = size(A,1); m = size(B,2); q = size(C,1);
-    Abar = [A, B; zeros(m,n), eye(m)];
-    Bbar = [zeros(n,m); eye(m)];
-    Cbar = [C, D];
-
-    % Phi rows: Cbar*Abar^i * [xk; uk]
-    Phi = zeros(Np*q, n+m);
-    G   = zeros(Np*q, Nc*m);
-    Ap  = eye(n+m);
+    % ---- build Phi and G without powers or toeplitz ----
+    Ap = eye(nx_aug);           % Abar^0
     for i = 1:Np
-        Ap  = Abar*Ap;
-        Phi((i-1)*q+1:i*q,:) = Cbar*Ap;
-        Aj = eye(n+m);
-        for j = 1:min(i,Nc)
-            G((i-1)*q+1:i*q, (j-1)*m+1:j*m) = Cbar*Aj*Bbar;
-            Aj = Abar*Aj;
+        Ap      = Abar * Ap;                        % Abar^i
+        r       = (i-1)*q + (1:q);
+        Phi(r,:) = Cbar * Ap;                       % q×nx_aug
+
+        % place H_{i-j} blocks in row i
+        for j = 1:min(i, Nc)
+            c = (j-1)*m + (1:m);
+            G(r, c) = H{i-j+1};                     % q×m
         end
     end
-else
-    % Non-augmented (only if D≈0)
-    n = size(A,1); m = size(B,2); q = size(C,1);
-    Phi = zeros(Np*q, n);
-    G   = zeros(Np*q, Nc*m);
-    Ap  = eye(n);
-    for i = 1:Np
-        Ap  = A*Ap;
-        Phi((i-1)*q+1:i*q,:) = C*Ap;
-        Aj = eye(n);
-        for j = 1:min(i,Nc)
-            G((i-1)*q+1:i*q, (j-1)*m+1:j*m) = C*Aj*B;
-            Aj = A*Aj;
-        end
-    end
-end
 
-
+    % ---- pack aug info ----
+    aug = struct('A',Abar,'B',Bbar,'C',Cbar,'nx_aug',nx_aug,'m',m,'q',q);
 end
