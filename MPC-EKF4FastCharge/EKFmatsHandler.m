@@ -1,94 +1,121 @@
-function MPC = EKFmatsHandler(ekfData, Xind, zk, Tk)
-% Build Δi-augmented plant and output rows for MPC from EKF + blending.
-% Outputs filled in MPC: A,B,Csoc,Dsoc,Cv,Dv,Cphi,Dphi,x_aug_k
-% Inputs:
-%   ekfData : EKF structure from iterEKF
-%   Xind    : indices/weights of the 4 neighbors (from iterEKF)
-%   zk      : latest EKF output vector (so we can compute Rct terms)
-%   Tk      : temperature [K] used this step
+function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
+% EKFmatsHandler  (nearest model, ORIGINAL SS ONLY)
+% Pick the closest local ROM (no blending) and return the linearized
+% state-space needed by MPC/constraints *without* Δu augmentation.
+%
+% Inputs
+%   ekfData : EKF struct with a grid of local models ekfData.M(iT,iZ)
+%             Each M(iT,iZ) has fields A,B (or A as diag vector), C, D.
+%   Xind    : struct with fields:
+%                .theT(1x4), .theZ(1x4)  indices of the 4 neighbors
+%                .gamma(1x4)             bilinear weights (sum=1)
+%            We choose the corner with max gamma (nearest).
+%   zk      : latest EKF output vector (needed for voltage composition)
+%   Tk      : temperature at this step (same units used by ROM functions)
+%
+% Output
+%   MPC : struct with ORIGINAL (non-augmented) SS rows:
+%           .A, .B                  % nx×nx, nx×m
+%           .Csoc, .Dsoc            % 1×nx, 1×m      (SOC row)
+%           .Cv,   .Dv              % 1×nx, 1×m      (voltage row)
+%           .Cphi, .Dphi            % 1×nx, 1×m      (side-reaction η row)
+%         plus trace fields:
+%           .iT, .iZ, .pickWeight
 
-    w = Xind.gamma(:);
+    % --------- 1) choose nearest corner by largest gamma ----------
+    [~, imax] = max(Xind.gamma(:));
+    iT = Xind.theT(imax);
+    iZ = Xind.theZ(imax);
 
-    % ----- Blend A (diagonal stored as vectors), then form matrix -----
-    A1 = ekfData.M(Xind.theT(1),Xind.theZ(1)).A;
-    A2 = ekfData.M(Xind.theT(2),Xind.theZ(2)).A;
-    A3 = ekfData.M(Xind.theT(3),Xind.theZ(3)).A;
-    A4 = ekfData.M(Xind.theT(4),Xind.theZ(4)).A;
+    mdl = ekfData.M(iT, iZ);
+    xhat = mdl.xhat;
 
-    Ablend_vec = w(1)*A1 + w(2)*A2 + w(3)*A3 + w(4)*A4;
-    n = numel(Ablend_vec);
-    A = diag(Ablend_vec);
+    % --------- 2) ORIGINAL A,B,C,D at that corner ----------
+    % A may be stored as diagonal entries; expand if needed
+    if isvector(mdl.A)
+        nx = numel(mdl.A);
+        A  = diag(mdl.A(:));
+    else
+        A  = mdl.A;
+        nx = size(A,1);
+    end
 
-    % Transient input gain (ROM design): ones
-    B = ones(n,1);
+    % Prefer B if provided; otherwise PBROM convention: ones(nx,1)
+    if isfield(mdl,'B') && ~isempty(mdl.B)
+        B = mdl.B;
+    else
+        B = ones(nx,1);
+    end
 
-    % Δi augmentation
-    A_aug = [A, B; zeros(1,n), 1];
-    B_aug = [zeros(n,1); 1];
+    C = mdl.C;
+    D = mdl.D;
 
-    % ----- Blend C and D -----
-    C1 = ekfData.M(Xind.theT(1),Xind.theZ(1)).C;  D1 = ekfData.M(Xind.theT(1),Xind.theZ(1)).D;
-    C2 = ekfData.M(Xind.theT(2),Xind.theZ(2)).C;  D2 = ekfData.M(Xind.theT(2),Xind.theZ(2)).D;
-    C3 = ekfData.M(Xind.theT(3),Xind.theZ(3)).C;  D3 = ekfData.M(Xind.theT(3),Xind.theZ(3)).D;
-    C4 = ekfData.M(Xind.theT(4),Xind.theZ(4)).C;  D4 = ekfData.M(Xind.theT(4),Xind.theZ(4)).D;
+    % --------- 3) Build output rows (ORIGINAL coordinates) ----------
+    % 3a) SOC row: z_k = Csoc*x_k + Dsoc*u_k with Dsoc = -Ts/(3600 Q)
+    Ts = ekfData.Ts;
+    Q  = ekfData.Q;                 % [Ah]
+    r  = -Ts/(3600*Q);              % SOC sensitivity to current
+    Csoc = zeros(1,nx);
+    Dsoc = r;
 
-    Cb = w(1)*C1 + w(2)*C2 + w(3)*C3 + w(4)*C4;
-    Db = w(1)*D1 + w(2)*D2 + w(3)*D3 + w(4)*D4;
+    % 3b) Voltage row: v_k = Cv*x_k + Dv*u_k + b_v,k
+    %     Compose from linear outputs using ROM indices if available.
+    Cv = zeros(1,nx);  Dv = 0;
+    try
+        ind      = ekfData.ind;           % structure of output row indices
+        cellData = ekfData.cellData;
+        F        = cellData.const.F;
+        R        = cellData.const.R;
 
-    % ----- Voltage row: replicate getChatV composition (include D) -----
-    ind = ekfData.ind;          % structure with row indices
-    cellData = ekfData.cellData;
-    F = cellData.const.F;  R = cellData.const.R;
+        % Film resistances at current operating SOC
+        SOCavg  = ekfData.SOC0;          % use EKF's running SOC0 (project conv.)
+        SOCn    = cellData.function.neg.soc(SOCavg, Tk);
+        SOCp    = cellData.function.pos.soc(SOCavg, Tk);
+        Rfn     = cellData.function.neg.Rf(SOCn, Tk);
+        Rfp     = cellData.function.pos.Rf(SOCp, Tk);
 
-    % film resistances using operating SOC
-    x0SOC = ekfData.SOC0 - ekfData.x0*(ekfData.Ts/(3600*ekfData.Q));
-    SOCn  = cellData.function.neg.soc(x0SOC, Tk);
-    SOCp  = cellData.function.pos.soc(x0SOC, Tk);
-    Rfn   = cellData.function.neg.Rf(SOCn, Tk);
-    Rfp   = cellData.function.pos.Rf(SOCp, Tk);
+        % Charge-transfer "resistances" via exchange-current i0 at collectors
+        i0n = cellData.function.neg.k0(SOCn, Tk) * ...
+              sqrt( zk(ind.Thetae0) * (1 - zk(ind.Thetass0)) * zk(ind.Thetass0) );
+        i0p = cellData.function.pos.k0(SOCp, Tk) * ...
+              sqrt( zk(ind.Thetae3) * (1 - zk(ind.Thetass3)) * zk(ind.Thetass3) );
+        Rctn = R*Tk/(F*i0n);
+        Rctp = R*Tk/(F*i0p);
 
-    % charge-transfer resistances (using zk for concentrations)
-    i0n = cellData.function.neg.k0(SOCn, Tk) * sqrt( zk(ind.Thetae0) * (1 - zk(ind.Thetass0)) * zk(ind.Thetass0) );
-    i0p = cellData.function.pos.k0(SOCp, Tk) * sqrt( zk(ind.Thetae3) * (1 - zk(ind.Thetass3)) * zk(ind.Thetass3) );
-    Rctn = R*Tk/(F*i0n);
-    Rctp = R*Tk/(F*i0p);
+        % Compose voltage row from linear outputs (Ifdl/If/Phie)
+        Cv =  Rfp*C(ind.Ifdl3,:) - Rfn*C(ind.Ifdl0,:) ...
+            + Rctp*C(ind.If3,:)  - Rctn*C(ind.If0,:)  ...
+            +       C(ind.Phie(end),:);
 
-    Cv =  Rfp*Cb(ind.Ifdl3,:) - Rfn*Cb(ind.Ifdl0,:) ...
-        + Rctp*Cb(ind.If3,:)   - Rctn*Cb(ind.If0,:) ...
-        +        Cb(ind.Phie(end),:);
-    Dv =  Rfp*Db(ind.Ifdl3,:) - Rfn*Db(ind.Ifdl0,:) ...
-        + Rctp*Db(ind.If3,:)   - Rctn*Db(ind.If0,:) ...
-        +        Db(ind.Phie(end),:);
+        Dv =  Rfp*D(ind.Ifdl3,:) - Rfn*D(ind.Ifdl0,:) ...
+            + Rctp*D(ind.If3,:)  - Rctn*D(ind.If0,:)  ...
+            +       D(ind.Phie(end),:);
+    catch
+        % If indices/functions are unavailable, leave Cv,Dv zeros and let the
+        % caller decide; this keeps the handler robust.
+        % (You can add a warning here if desired.)
+    end
 
-    % ----- η (side-reaction overpotential) at negative collector -----
-    Cphi = Cb(ind.Phise0,:); 
-    Dphi = Db(ind.Phise0,:);
+    % 3c) Side-reaction overpotential row at negative collector:
+    Cphi = zeros(1,nx); Dphi = 0;
+    try
+        Cphi = C(ind.Phise0,:);
+        Dphi = D(ind.Phise0,:);
+    catch
+        % leave zeros if index not present
+    end
 
-    % ----- SOC row: z = SOC0 + r * u   with r = -Ts/(3600*Q)
-    r = -ekfData.Ts/(3600*ekfData.Q);
-    Csoc = [zeros(1,n), r];
-    Dsoc = 0;
+    % --------- 4) Pack result (ORIGINAL SS only) ----------
+    MPC = struct();
+    MPC.A    = A;
+    MPC.B    = B;
 
-    % ----- Pack results -----
-    MPC.A  = A_aug;
-    MPC.B  = B_aug;
+    MPC.Csoc = Csoc;  MPC.Dsoc = Dsoc;
+    MPC.Cv   = Cv;    MPC.Dv   = Dv;
+    MPC.Cphi = Cphi;  MPC.Dphi = Dphi;
 
-    MPC.Csoc = Csoc;                MPC.Dsoc = Dsoc;
-    MPC.Cv   = [Cv,  Dv];           MPC.Dv   = 0;
-    MPC.Cphi = [Cphi, Dphi];        MPC.Dphi = 0;
-
-    % % initial augmented state for RHS terms (x_k; u_k)
-    % if isfield(ekfData,'xhat')
-    %     xk = ekfData.xhat(:);
-    % else
-    %     % fallback: weighted average of neighbor xhats if present
-    %     xk = zeros(n,1);
-    %     for kk=1:4
-    %         if isfield(ekfData.M(Xind.theT(kk),Xind.theZ(kk)), 'xhat')
-    %             xk = xk + w(kk) * ekfData.M(Xind.theT(kk),Xind.theZ(kk)).xhat(:);
-    %         end
-    %     end
-    % end
-    % uk = mpcData.uk_1;
-    % MPC.x_aug_k = [xk; uk];
+    % Traceability
+    MPC.iT = iT;
+    MPC.iZ = iZ;
+    MPC.pickWeight = Xind.gamma(imax);
 end
