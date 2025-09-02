@@ -49,7 +49,7 @@ mpcData.lambda  = [];                  % dual warm start
 mpcData.DUk_1   = zeros(Nc,1);         % last optimal Δu sequence (optional)
 mpcData.xk_1    = [];                  % last state (optional)
 mpcData.uk_1    = 0;                   % last applied current
-% mpcData.SOCk_1  = SOC0;                % last SOC
+mpcData.SOCk_1  = 0;                % last SOC
 mpcData.SOC0    = SOC0;
 
 % Establish MPC constraints
@@ -65,14 +65,12 @@ if isfield(opts, 'limits'), L = opts.limits; end
 % Derive Iapp_max from ROM + Crate
 Imax = -opts.ROM.cellData.function.const.Q(0.5)*opts.Crate;  % magnitude [A]
 L.u_min = Imax;
+% mpcData.uk_1    = -Imax;                   % last applied current
 
 % Store limits
 % if ~isfield(mpcData,'const'), mpcData.const = struct; end
 mpcData.const = copyfields(mpcData.const, L);
 
-% ---- Prediction-cache seeds
-mpcData.pred = struct();
-mpcData.pred.u.Cu = tril(ones(Nc));    % for absolute-u constraints; others built per step
 end
 
 % === helpers ===
