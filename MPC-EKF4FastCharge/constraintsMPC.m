@@ -1,4 +1,4 @@
-function [M, gamma] = constraintsMPC(x_aug_k, mpcData)
+function [M, gamma] = constraintsMPC(x_aug_k, cellState, mpcData)
 % Build stacked inequality constraints M*DU <= gamma
 % Inputs:
 %   x_aug_k : augmented state at time k  [ (nx+m) x 1 ]  (i.e., [x_k; u_k])
@@ -12,20 +12,16 @@ function [M, gamma] = constraintsMPC(x_aug_k, mpcData)
 % Output:
 %   M, gamma : inequality matrices for Hildreth / QP (M*DU <= gamma)
 
-    Nc = mpcData.Nc;
+    Nc = mpcData.Nc; Np = mpcData.Np;
     M = []; gamma = [];
 
     useCurrent = numel(mpcData.const.constraints)>=1 && mpcData.const.constraints(1)==1;
     useVoltage = numel(mpcData.const.constraints)>=2 && mpcData.const.constraints(2)==1;
     useEta     = numel(mpcData.const.constraints)>=3 && mpcData.const.constraints(3)==1;
 
-    %% (1) Current (absolute u) + rate (Δu) limits
+    % (1) Current (absolute u) + rate (Δu) limits
     if useCurrent
-        if isfield(mpcData,'pred') && isfield(mpcData.pred,'u') && isfield(mpcData.pred.u,'Cu')
-            Cu = mpcData.pred.u.Cu;
-        else
-            Cu = tril(ones(Nc));  % accumulator
-        end
+        Cu = tril(ones(Nc));  % accumulator
         uk    = mpcData.uk_1;
         u_max = mpcData.const.u_max;
         u_min = mpcData.const.u_min;
@@ -47,7 +43,9 @@ function [M, gamma] = constraintsMPC(x_aug_k, mpcData)
 
     %% (2) Voltage bounds
     if useVoltage
-        Phi_v = mpcData.pred.v.Phi;   G_v = mpcData.pred.v.G;
+        % Voltage prediction: pass Ctilde=[Cv Dv], D=0
+        [Phi_v, G_v] = predMat(cellState.MPC.A, cellState.MPC.B, ...
+            cellState.MPC.Cv, cellState.MPC.Dv, Np, Nc);
         nrows = size(Phi_v,1);        % equals q*Np (no need for q)
         v_max = mpcData.const.v_max;  v_min = mpcData.const.v_min;
 
@@ -69,7 +67,9 @@ function [M, gamma] = constraintsMPC(x_aug_k, mpcData)
 
     %% (3) Side-reaction overpotential (η/ϕ) lower bound
     if useEta
-        Phi_e = mpcData.pred.eta.Phi;   G_e = mpcData.pred.eta.G;
+        % η/ϕ prediction: pass Ctilde=[Cphi Dphi], D=0
+        [Phi_e, G_e] = predMat(cellState.MPC.A, ...
+            cellState.MPC.B, cellState.MPC.Cphi, cellState.MPC.Dphi, Np, Nc);
         nrows = size(Phi_e,1);
         eta_min = mpcData.const.phise_min;
 
