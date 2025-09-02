@@ -7,7 +7,7 @@ load(ROMfile,'ROM');
 % Simulation conditions
 TC = 25;                          % [°C] simulation temperature
 Ts = 1;                           % [s] sample time
-finalTime = 3600;                 % [s]
+finalTime = 1200;                 % [s]
 time = (0:finalTime).';           % N samples as a column
 N = numel(time);
 SOC0 = 10;                        % [%] initial SOC (project-wide convention)
@@ -78,11 +78,10 @@ for k = 1:N
     [zk, zbk, ekfData, Xind] = iterEKF(voltage, uk, TC, ekfData);
 
     % 3) EKF -> MPC linearization (Δi form)
-    MPC = EKFmatsHandler(ekfData, Xind, zk, TC);
+    [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, TC);
     cellState.MPC = MPC;
-
     % 4) MPC inputs
-    xk = ekfData.xhat(:);              % state estimate at k
+    xk = xhat;              % state estimate at k
     mpcData.SOCk_1 = zk(end);
 
     % 5) MPC step -> command uk for NEXT step
