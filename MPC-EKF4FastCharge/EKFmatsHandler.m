@@ -28,7 +28,7 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
     iZ = Xind.theZ(imax);
 
     mdl = ekfData.M(iT, iZ);
-    xhat = mdl.xhat;
+    xhat = [mdl.xhat];
 
     % --------- 2) ORIGINAL A,B,C,D at that corner ----------
     % A may be stored as diagonal entries; expand if needed
@@ -50,12 +50,9 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
     C = mdl.C;
     D = mdl.D;
 
-    % --------- 3) Build output rows (ORIGINAL coordinates) ----------
-    % 3a) SOC row: z_k = Csoc*x_k + Dsoc*u_k with Dsoc = -Ts/(3600 Q)
-    Ts = ekfData.Ts;
-    Q  = ekfData.Q;                 % [Ah]
-    r  = -Ts/(3600*Q);              % SOC sensitivity to current
-    Csoc = zeros(1,nx);
+    % ----- SOC row: z = SOC0 + r * u   with r = -Ts/(3600*Q)
+    r = -ekfData.Ts/(3600*ekfData.Q);
+    Csoc = [zeros(1,nx)];                 % last (augmented) channel = x_i
     Dsoc = r;
 
     % 3b) Voltage row: v_k = Cv*x_k + Dv*u_k + b_v,k

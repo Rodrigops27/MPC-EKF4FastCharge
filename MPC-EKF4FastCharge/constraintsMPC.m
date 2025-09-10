@@ -52,14 +52,12 @@ function [M, gamma] = constraintsMPC(x_aug_k, cellState, mpcData)
         % Broadcast scalars; validate vectors
         v_max = v_max(:);  if isscalar(v_max), v_max = repmat(v_max, nrows,1); end
         v_min = v_min(:);  if isscalar(v_min), v_min = repmat(v_min, nrows,1); end
-        assert(numel(v_max)==nrows && numel(v_min)==nrows, ...
-               'Voltage limits must be scalar or length(size(Phi_v,1)).');
 
         rhs_v = Phi_v * x_aug_k;
 
         Mv     = [ G_v;            -G_v            ];
         gammav = [ v_max - rhs_v;
-                  -(v_min - rhs_v)                  ];
+                  -(v_min - rhs_v)                 ];
 
         M     = [M;     Mv];
         gamma = [gamma; gammav];
@@ -85,5 +83,32 @@ function [M, gamma] = constraintsMPC(x_aug_k, cellState, mpcData)
 
         M     = [M;     Meta];
         gamma = [gamma; gammaeta];
+    end
+    
+    
+    % --- SOC upper bound (prevents overshoot) ---
+    if isfield(mpcData.const,'z_max')
+        Phi_s = mpcData.Phi_soc;   % q*Np x (nx+m) with q=1 for SOC
+        G_s   = mpcData.G_soc;     % q*Nc wide (Nc cols)
+        rhs_s  = Phi_s * x_aug_k + mpcData.SOCk_1*ones(size(Phi_s,1),1);  % add baseline SOC_k
+
+        zmax = mpcData.const.z_max;
+        if isfield(mpcData.const,'z_tol'), zmax = zmax + mpcData.const.z_tol; end
+        zmax_vec = zmax * ones(size(rhs_s));
+        gam_soc_u =  zmax_vec - rhs_s;
+
+        M     = [M;     G_s];
+        gamma = [gamma; gam_soc_u];
+    end
+
+    % --- Optional: terminal lower bound (ensure reaching target) ---
+    if isfield(mpcData.const,'z_target_terminal') && mpcData.const.z_target_terminal
+        Phi_s = mpcData.Phi_soc;  G_s   = mpcData.G_soc;
+        rN    = Phi_s(end,:)*x_aug_k;
+        zt    = mpcData.const.z_max;   % reuse target as terminal min
+        Mterm   = -G_s(end,:);                 % 1 x Nc
+        gammaterm = -zt + rN;                  % scalar
+        M     = [M;     Mterm];
+        gamma = [gamma; gammaterm];
     end
 end
