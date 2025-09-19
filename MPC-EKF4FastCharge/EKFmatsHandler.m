@@ -28,7 +28,7 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
     iZ = Xind.theZ(imax);
 
     mdl = ekfData.M(iT, iZ);
-    xhat = [mdl.xhat];
+    xhat = mdl.xhat;
 
     % --------- 2) ORIGINAL A,B,C,D at that corner ----------
     % A may be stored as diagonal entries; expand if needed
@@ -63,21 +63,22 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
         cellData = ekfData.cellData;
         F        = cellData.const.F;
         R        = cellData.const.R;
+        TK = Tk+273.15;
 
         % Film resistances at current operating SOC
         SOCavg  = ekfData.SOC0;          % use EKF's running SOC0 (project conv.)
-        SOCn    = cellData.function.neg.soc(SOCavg, Tk);
-        SOCp    = cellData.function.pos.soc(SOCavg, Tk);
-        Rfn     = cellData.function.neg.Rf(SOCn, Tk);
-        Rfp     = cellData.function.pos.Rf(SOCp, Tk);
+        SOCn    = cellData.function.neg.soc(SOCavg, TK);
+        SOCp    = cellData.function.pos.soc(SOCavg, TK);
+        Rfn     = cellData.function.neg.Rf(SOCn, TK);
+        Rfp     = cellData.function.pos.Rf(SOCp, TK);
 
         % Charge-transfer "resistances" via exchange-current i0 at collectors
-        i0n = cellData.function.neg.k0(SOCn, Tk) * ...
+        i0n = cellData.function.neg.k0(SOCn, TK) * ...
               sqrt( zk(ind.Thetae0) * (1 - zk(ind.Thetass0)) * zk(ind.Thetass0) );
-        i0p = cellData.function.pos.k0(SOCp, Tk) * ...
+        i0p = cellData.function.pos.k0(SOCp, TK) * ...
               sqrt( zk(ind.Thetae3) * (1 - zk(ind.Thetass3)) * zk(ind.Thetass3) );
-        Rctn = R*Tk/(F*i0n);
-        Rctp = R*Tk/(F*i0p);
+        Rctn = R*TK/(F*i0n);
+        Rctp = R*TK/(F*i0p);
 
         % Compose voltage row from linear outputs (Ifdl/If/Phie)
         Cv =  Rfp*C(ind.Ifdl3,:) - Rfn*C(ind.Ifdl0,:) ...
@@ -87,6 +88,13 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
         Dv =  Rfp*D(ind.Ifdl3,:) - Rfn*D(ind.Ifdl0,:) ...
             + Rctp*D(ind.If3,:)  - Rctn*D(ind.If0,:)  ...
             +       D(ind.Phie(end),:);
+
+        % ---- Voltage bias term b_v,k ----
+        Upos = cellData.function.pos.Uocp(SOCp, TK);   % U_ocp^pos(c_s,e,k)
+        Uneg = cellData.function.neg.Uocp(SOCn, TK);   % U_ocp^neg(c_s,e,k(0))
+        bphi = 0;  % optional electrolyte bias; set to 0 unless you have it explicitly
+        bv   = (Upos - Uneg) + bphi;
+
     catch
         % If indices/functions are unavailable, leave Cv,Dv zeros and let the
         % caller decide; this keeps the handler robust.
@@ -102,6 +110,7 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
         % leave zeros if index not present
     end
 
+
     % --------- 4) Pack result (ORIGINAL SS only) ----------
     MPC = struct();
     MPC.A    = A;
@@ -110,6 +119,7 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
     MPC.Csoc = Csoc;  MPC.Dsoc = Dsoc;
     MPC.Cv   = Cv;    MPC.Dv   = Dv;
     MPC.Cphi = Cphi;  MPC.Dphi = Dphi;
+    MPC.bv = bv;    % Voltage bias term
 
     % Traceability
     MPC.iT = iT;
