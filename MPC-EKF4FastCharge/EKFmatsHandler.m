@@ -14,7 +14,7 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
 %   Tk      : temperature at this step (same units used by ROM functions)
 %
 % Output
-%   MPC : struct with ORIGINAL (non-augmented) SS rows:
+%   MPC : struct with:
 %           .A, .B                  % nx×nx, nx×m
 %           .Csoc, .Dsoc            % 1×nx, 1×m      (SOC row)
 %           .Cv,   .Dv              % 1×nx, 1×m      (voltage row)
@@ -44,44 +44,52 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
     Csoc = [zeros(1,nx-1), r];
     Dsoc = 0;
 
-    % 3b) Voltage row: v_k = Cv*x_k + Dv*u_k + b_v,k
+    %% 3b) Voltage row: v_k = Cv*x_k + Dv*u_k + b_v,k
     %     Compose from linear outputs using ROM indices if available.
     ind      = ekfData.ind;           % structure of output row indices
     cellData = ekfData.cellData;
     F        = cellData.const.F;
     R        = cellData.const.R;
-    TK = Tk+273.15;
+    TK = Tk + 273.15;
 
-    % Film resistances at current operating SOC
-    SOCavg  = ekfData.SOC0;          % use EKF's running SOC0 (project conv.)
-    SOCn    = cellData.function.neg.soc(SOCavg, TK);
-    SOCp    = cellData.function.pos.soc(SOCavg, TK);
-    Rfn     = cellData.function.neg.Rf(SOCn, TK);
-    Rfp     = cellData.function.pos.Rf(SOCp, TK);
-
+    % Operating SOC
+    SOCavg  = zk(end);          % CellSoc Estimate
+    SOCnAvg    = cellData.function.neg.soc(SOCavg, TK);
+    SOCpAvg    = cellData.function.pos.soc(SOCavg, TK);
+    % Compute overpotential at current-collectors via asinh method (eta)
+    k0n = cellData.function.neg.k0(SOCnAvg,TK);
+    k0p = cellData.function.pos.k0(SOCpAvg,TK);      
     % Charge-transfer "resistances" via exchange-current i0 at collectors
-    i0n = cellData.function.neg.k0(SOCn, TK) * ...
-        sqrt( zk(ind.Thetae0) * (1 - zk(ind.Thetass0)) * zk(ind.Thetass0) );
-    i0p = cellData.function.pos.k0(SOCp, TK) * ...
-        sqrt( zk(ind.Thetae3) * (1 - zk(ind.Thetass3)) * zk(ind.Thetass3) );
-    Rctn = R*TK/(F*i0n);
-    Rctp = R*TK/(F*i0p);
+    i0n = k0n*sqrt(zk(ind.Thetae(1)).* ...
+               (1-zk(ind.Thetass0)).*zk(ind.Thetass0));
+    i0p = k0p*sqrt(zk(ind.Thetae(end)).*...
+               (1-zk(ind.Thetass3)).*zk(ind.Thetass3));
+    % Film resistances:
+    Rfn     = cellData.function.neg.Rf(SOCnAvg, TK);
+    Rfp     = cellData.function.pos.Rf(SOCpAvg, TK);
 
-    % Compose voltage row from linear outputs (Ifdl/If/Phie)
+    % In case of Small-signal (asinh) linearization for composing If
+    % Rctn = R*TK/(F*i0n); Rctp = R*TK/(F*i0p);
+
+    % Compose voltage row from linear outputs (Ifdl/Phie)
     Cv =  Rfp*C(ind.Ifdl3,:) - Rfn*C(ind.Ifdl0,:) ...
-        + Rctp*C(ind.If3,:)  - Rctn*C(ind.If0,:)  ...
         +       C(ind.Phie(end),:);
+        % + Rctp*C(ind.If3,:)  - Rctn*C(ind.If0,:)  ...
 
     Dv =  Rfp*D(ind.Ifdl3,:) - Rfn*D(ind.Ifdl0,:) ...
-        + Rctp*D(ind.If3,:)  - Rctn*D(ind.If0,:)  ...
         +       D(ind.Phie(end),:);
-
+        % + Rctp*D(ind.If3,:)  - Rctn*D(ind.If0,:)  ...
+    
     % ---- Voltage bias term b_v,k ----
-    Upos = cellData.function.pos.Uocp(SOCp, TK);   % U_ocp^pos(c_s,e,k)
-    Uneg = cellData.function.neg.Uocp(SOCn, TK);   % U_ocp^neg(c_s,e,k(0))
-    bphi = 0;  % optional electrolyte bias; set to 0 unless you have it explicitly
-    bv   = (Upos - Uneg) + bphi;
+    Upos = cellData.function.pos.Uocp(zk(ind.Thetass3), TK);   % U_ocp^pos(c_s,e,k)
+    Uneg = cellData.function.neg.Uocp(zk(ind.Thetass0), TK);   % U_ocp^neg(c_s,e,k(0))
+    % OverPotentials
+    If0 = zk(ind.If0); If3 = zk(ind.If3);
+    negEta0 = 2*R*TK/F*asinh(If0./(2*i0n));
+    posEta3 = 2*R*TK/F*asinh(If3./(2*i0p));
 
+    bphi = 0.01*0;  % electrolyte bias;
+    bv   = (Upos - Uneg) + (posEta3 - negEta0) + bphi;
 
     % 3c) Side-reaction overpotential row at negative collector:
     Cphi = zeros(1,nx); Dphi = 0;
