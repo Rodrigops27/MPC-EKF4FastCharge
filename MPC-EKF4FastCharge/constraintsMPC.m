@@ -1,4 +1,4 @@
-function [M, gamma] = constraintsMPC(x_aug_k, cellState, mpcData)
+ function [M, gamma] = constraintsMPC(x_aug_k, cellState, mpcData)
 % Build stacked inequality constraints M*DU <= gamma
 % Inputs:
 %   x_aug_k : augmented state at time k  [ (nx+m) x 1 ]  (i.e., [x_k; u_k])
@@ -53,7 +53,9 @@ function [M, gamma] = constraintsMPC(x_aug_k, cellState, mpcData)
         v_max = v_max(:);  if isscalar(v_max), v_max = repmat(v_max, nrows,1); end
         v_min = v_min(:);  if isscalar(v_min), v_min = repmat(v_min, nrows,1); end
 
-        rhs_v = Phi_v * x_aug_k;
+        % rhs_v = Phi_v * x_aug_k + bv;
+        rhs_v = Phi_v * x_aug_k + cellState.MPC.bv*ones(size(Phi_v,1),1);
+
 
         Mv     = [ G_v;            -G_v            ];
         gammav = [ v_max - rhs_v;
@@ -76,7 +78,7 @@ function [M, gamma] = constraintsMPC(x_aug_k, cellState, mpcData)
         assert(numel(eta_min)==nrows, ...
                'phise_min must be scalar or length(size(Phi_eta,1)).');
 
-        rhs_e = Phi_e * x_aug_k;
+        rhs_e = Phi_e * x_aug_k + cellState.MPC.bphi*ones(size(Phi_e,1),1);
 
         Meta     = -G_e;
         gammaeta = -eta_min + rhs_e;

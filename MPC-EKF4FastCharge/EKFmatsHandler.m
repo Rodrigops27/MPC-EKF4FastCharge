@@ -88,19 +88,15 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
     negEta0 = 2*R*TK/F*asinh(If0./(2*i0n));
     posEta3 = 2*R*TK/F*asinh(If3./(2*i0p));
 
-    bphi = 0.01*0;  % electrolyte bias;
-    bv   = (Upos - Uneg) + (posEta3 - negEta0) + bphi;
+    b_phi = 0.01*0;  % electrolyte bias;
+    bv   = (Upos - Uneg) + (posEta3 - negEta0) + b_phi;
+
 
     % 3c) Side-reaction overpotential row at negative collector:
-    Cphi = zeros(1,nx); Dphi = 0;
-    try
-        Cphi = C(ind.Phise0,:);
-        Dphi = D(ind.Phise0,:);
-    catch
-        % leave zeros if index not present
-    end
-
-
+    Uocpn = cellData.function.neg.Uocp(SOCnAvg);   % Phise 'residual'
+    Cphi = C(ind.negPhise(2),:);
+    Dphi = D(ind.negPhise(2),:);
+    
     % --------- 4) Pack result (ORIGINAL SS only) ----------
     MPC = struct();
     MPC.A    = A;
@@ -109,7 +105,8 @@ function [MPC, xhat] = EKFmatsHandler(ekfData, Xind, zk, Tk)
     MPC.Csoc = Csoc;  MPC.Dsoc = Dsoc;
     MPC.Cv   = [Cv 0];    MPC.Dv   = Dv;
     MPC.Cphi = [Cphi 0];  MPC.Dphi = Dphi;
-    MPC.bv = bv;    % Voltage bias term
+    MPC.bv = bv;        % Voltage bias term
+    MPC.bphi = Uocpn;   % Solid-electrolyte phase potential bias
 
     % Traceability
     MPC.iT = iT;
