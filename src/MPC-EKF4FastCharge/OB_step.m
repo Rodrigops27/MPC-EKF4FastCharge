@@ -26,6 +26,13 @@ function [Vcell, obs, cellState] = OB_step(Iapp, Tc, cellState, ROM, initCfg)
 %
 % Reference implementation adapted from "outBlend.m". 
 % (Functions mirrored: setupIndsLocs, setupBlend, simStep, shortWarn)
+%   Prof. Gregory L. Plett and Prof. M. Scott Trimboli
+%   University of Colorado Colorado Springs (UCCS)
+% as part of the Physics-Based Reduced-Order Model framework for lithium-ion
+% batteries (see: Battery Management Systems, Volume III: Physics-Based
+% Methods, Artech House, 2024).
+% License: This file is distributed under the Creative Commons Attribution-ShareAlike
+%   4.0 International License (CC BY-SA 4.0).
 % -------------------------------------------------------------------------
 
   % -- One-time setup / first call ----------------------------------------
