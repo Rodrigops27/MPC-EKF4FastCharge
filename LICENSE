@@ -1,0 +1,42 @@
+# License
+
+This repository contains code adapted from the **Battery Management Systems, Volume III: Physics-Based Methods** by Prof. Gregory L. Plett and Prof. M. Scott Trimboli (Artech House, 2024), and their associated MATLAB code distribution.  
+
+The original source files include (but are not limited to):  
+- `initKF.m`  
+- `iterEKF.m`  
+- `ROM_NMC30_HRA.mat`
+- `outBlend.m` (basis for `OB_step.m`)
+
+
+These are distributed under the **Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0)**.  
+The full license text is available at:  
+<https://creativecommons.org/licenses/by-sa/4.0/>  
+
+---
+
+## You are free to:
+- **Share** — copy and redistribute the material in any medium or format  
+- **Adapt** — remix, transform, and build upon the material for any purpose, even commercially  
+
+## Under the following terms:
+- **Attribution** — You must give appropriate credit, provide a link to the license, and indicate if changes were made.  
+- **ShareAlike** — If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.  
+
+---
+
+## Attribution
+When using this repository or derivative works, please cite:  
+- Gregory L. Plett and M. Scott Trimboli, *Battery Management Systems, Volume III: Physics-Based Methods*, Artech House, 2024.  
+
+
+---
+
+## Modifications
+The following files and functions represent adaptations and extensions for the **MPC fast-charge framework**:  
+- `OB_step.m` (single-step ROM simulator, based on `outBlend.m`)  
+- `EKFmatsHandler.m` (EKF-to-MPC linearization)  
+- `iterMPC.m`, `constraintsMPC.m`, `hildreth.m`, `predMat.m` (MPC formulation and solver)  
+- `runMPC.m` (main driver script)  
+
+These are provided under the same CC BY-SA 4.0 license.
