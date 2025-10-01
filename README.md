@@ -104,12 +104,11 @@ Simulation demonstrates:
 * MPC prediction horizon **Np = 5** and control horizon **Nc = 2**.
 
 ### Fast Charge Protocols Discussion
-Fast Charge Protocol with applied current, voltage and side-reaction overpotential constraints.
 ![Fast Charge Protocol with Side-Reaction Constraint](assets/MPCEKF1095Phise.png)
+Fast Charge Protocol with applied current, voltage and side-reaction overpotential constraints.
 
-Fast Charge Protocol with applied current and voltage but without side-reaction overpotential constraints.
 ![Fast Charge Protocol without Side-Reaction Constraint](assets/MPCEKF1095WOPhise.png)
-This plot is on development, where a PDE solver was used to complement the ROM solution, since the ROM becomes less accurate beyond 80% SOC.
+Fast Charge Protocol with applied current and voltage but without side-reaction overpotential constraints. This plot is on development, where a PDE solver was used to complement the ROM solution, since the ROM becomes less accurate beyond 80% SOC.
 
 When the **side-reaction overpotential constraint is enforced**, the MPC adaptively reduces the applied current as the electrode potentials approach the plating threshold, leading to a safer but slightly slower charge. At the beginning of the simulation, the charging profile resembles a **Constant-Current/Constant-Voltage (CC–CV)** trajectory. However, as the MPC foresees a potential violation of the side-reaction overpotential constraint, it proactively backs off the current to respect the limit — as can be seen in the figure. Subsequent current calculations then allow charging to continue as aggressively as possible while still honoring the imposed constraint.
 
@@ -129,9 +128,12 @@ In both cases, the **cell voltage limit is reached just prior to achieving the S
 
 ## References
 
-\[1] G. L. Plett, & M. S. Trimboli, *Battery Management Systems, Volume III: Physics-Based Methods*. Artech House, 2024.
-\[2] M. A. Xavier, A. K. de Souza, K. Karami, G. L. Plett, and M. S. Trimboli, *A Computational Framework for Lithium-Ion Cell-Level Model Predictive Control Using a Physics-Based Reduced-Order Model*, ACC 2021.
-\[3] Y. Li, L. Aldrich, K. Stetzel, J. Lee, G. L. Plett, *Optimal fast charging of lithium-ion cells under electrochemical-thermal constraints*, Applied Energy, 269, 2020, 115127. 
+## References  
+
+[1] G. L. Plett, & M. S. Trimboli, *Battery Management Systems, Volume III: Physics-Based Methods*. Artech House, 2024.  
+[2] M. A. Xavier, A. K. de Souza, K. Karami, G. L. Plett, and M. S. Trimboli, *A Computational Framework for Lithium-Ion Cell-Level Model Predictive Control Using a Physics-Based Reduced-Order Model*, ACC 2021.  
+[3] Y. Li, L. Aldrich, K. Stetzel, J. Lee, G. L. Plett, *Optimal fast charging of lithium-ion cells under electrochemical-thermal constraints*, Applied Energy, 269, 2020, 115127.  
+
 ---
 
 ## Acknowledgments & Copyright
