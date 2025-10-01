@@ -47,19 +47,16 @@
         [Phi_v, G_v] = predMat(cellState.MPC.A, cellState.MPC.B, ...
             cellState.MPC.Cv, cellState.MPC.Dv, Np, Nc);
         nrows = size(Phi_v,1);        % equals q*Np (no need for q)
-        v_max = mpcData.const.v_max;  v_min = mpcData.const.v_min;
-
+        v_max = mpcData.const.v_max;
+        
         % Broadcast scalars; validate vectors
         v_max = v_max(:);  if isscalar(v_max), v_max = repmat(v_max, nrows,1); end
-        v_min = v_min(:);  if isscalar(v_min), v_min = repmat(v_min, nrows,1); end
 
         % rhs_v = Phi_v * x_aug_k + bv;
         rhs_v = Phi_v * x_aug_k + cellState.MPC.bv*ones(size(Phi_v,1),1);
 
-
-        Mv     = [ G_v;            -G_v            ];
-        gammav = [ v_max - rhs_v;
-                  -(v_min - rhs_v)                 ];
+        Mv     = G_v;
+        gammav = v_max - rhs_v;
 
         M     = [M;     Mv];
         gamma = [gamma; gammav];
