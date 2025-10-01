@@ -98,7 +98,7 @@ Importantly, these results illustrate that **operating within electrochemical li
 
 * This framework enables **constraint-aware, physics-informed charging protocols**.
 * Outlook: thermal coupling, experimental validation and more detailed degradation mechanisms.
-* The potential viability of this method is inferred from both simulation and experimental results, which have also demonstrated four charging strategies similar in principle to the one presented here \[3].
+* The potential viability of this method is inferred from both simulation and experimental results, which have also demonstrated four charging strategies similar in principle to the one presented in \[3].
 
 ---
 
