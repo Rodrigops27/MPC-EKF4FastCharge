@@ -65,32 +65,6 @@ The control loop consists of the following major steps each sampling instant:
 
 ---
 
-## Repository Structure
-
-* **Main simulation**
-
-  * `runMPC.m` — entry point to run a full charging experiment
-* **ROM simulation**
-
-  * `outBlend.m` — full profile ROM simulation
-  * `OB_step.m` — single-step ROM for MPC
-* **Estimation**
-
-  * `initKF.m` — initialize EKF
-  * `iterEKF.m` — EKF iteration
-* **MPC preparation**
-
-  * `EKFmatsHandler.m` — builds augmented plant for MPC
-  * `predMat.m` — constructs prediction matrices
-* **MPC optimization**
-
-  * `initMPC.m` — initialize MPC data structure
-  * `iterMPC.m` — single MPC iteration
-  * `constraintsMPC.m` — build inequality matrices
-  * `hildreth.m` — dual QP solver
-
----
-
 ## Results
 
 Simulation demonstrates:
@@ -112,9 +86,11 @@ Simulation demonstrates:
 
 When the **side-reaction overpotential constraint is enforced**, the MPC adaptively reduces the applied current as the electrode potentials approach the plating threshold, leading to a safer but slightly slower charge. At the beginning of the simulation, the charging profile resembles a **Constant-Current/Constant-Voltage (CC–CV)** trajectory. However, as the MPC foresees a potential violation of the side-reaction overpotential constraint, it proactively backs off the current to respect the limit — as can be seen in the figure. Subsequent current calculations then allow charging to continue as aggressively as possible while still honoring the imposed constraint.
 
-By contrast, when **no overpotential constraint is imposed**, the controller follows a classic **constant-current/constant-voltage (CC–CV) charging profile**, which completes the 10–95% SOC charge in roughly **1,500 seconds**. While faster, this trajectory risks lithium plating.
+By contrast, when **no overpotential constraint is imposed**, the controller follows a classic **CC–CV charging profile**, which completes the 10–95% SOC charge in roughly **1,500 seconds**. While faster, this trajectory risks lithium plating.
 
-In both cases, the **cell voltage limit is reached just prior to achieving the SOC target**, which is typical of lithium-ion fast-charge protocols. Importantly, these results illustrate that **operating within electrochemical limits extends lifetime but comes at the cost of additional charging time** compared to unconstrained CC–CV operation.
+In both cases, the **cell voltage limit is reached just prior to achieving the SOC target**, which is typical of lithium-ion fast-charge protocols. 
+
+Importantly, these results illustrate that **operating within electrochemical limits extends lifetime but comes at the cost of additional charging time** compared to unconstrained CC–CV operation.
 
 ---
 
