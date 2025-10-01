@@ -106,7 +106,8 @@ Importantly, these results illustrate that **operating within electrochemical li
 
 [1] G. L. Plett, & M. S. Trimboli, *Battery Management Systems, Volume III: Physics-Based Methods*. Artech House, 2024.  
 [2] M. A. Xavier, A. K. de Souza, K. Karami, G. L. Plett, and M. S. Trimboli, *A Computational Framework for Lithium-Ion Cell-Level Model Predictive Control Using a Physics-Based Reduced-Order Model*, ACC 2021.  
-[3] Y. Li, L. Aldrich, K. Stetzel, J. Lee, G. L. Plett, *Optimal fast charging of lithium-ion cells under electrochemical-thermal constraints*, Applied Energy, 269, 2020, 115127.  
+[3] Y. Yin and S.-Y. Choe, “Actively temperature controlled health-aware fast charging method for lithium-ion battery using nonlinear model predictive control,” Applied Energy, vol. 271, 2020, Art. no. 115232.
+
 
 ---
 
