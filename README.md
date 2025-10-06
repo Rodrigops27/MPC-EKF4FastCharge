@@ -5,13 +5,11 @@ Lithium plating is one of the most critical degradation mechanisms during fast c
 
 To sustain battery life while still enabling high-performance charging, this project implements a **fast-charging control algorithm** for lithium-ion cells. The approach combines a **physics-based reduced-order model (ROM)** with an **Extended Kalman Filter (EKF)** for state estimation and a **Model Predictive Controller (MPC)** that enforces electrochemical and operational constraints, solved efficiently using **Hildreth’s algorithm**.
 
-The code is designed for the **NMC30 (3.7 V, 30 Ah) lithium-ion cell**, using the physics-based reduced-order model developed by **Prof. Gregory Plett and Prof. Scott Trimboli** \[1], and demonstrates how constrained MPC can enable safe yet accelerated charging.
+This work builds on the computational framework introduced in \[2], extending it to a complete MATLAB implementation for fast-charge control. The central idea is to move beyond simple voltage-based protections and instead **incorporate internal electrochemical states** into the control loop.
 
 ---
 
 ## Background
-
-This work builds on the computational framework introduced in \[2], extending it to a complete MATLAB implementation for fast-charge control. The central idea is to move beyond simple voltage-based protections and instead **incorporate internal electrochemical states** into the control loop.
 
 Lithium plating, an electrochemical side reaction at the negative electrode, is particularly problematic during fast charging when lithium diffusion into graphite particles becomes a bottleneck. Following the formulation of Arora et al. \[4], lithium metal is predicted to nucleate near the separator, where electrolyte potentials are highest, and then propagate toward the current collector. This mechanism can be captured within the ROM, making it possible to monitor and constrain the **side-reaction overpotential** directly.
 
@@ -37,7 +35,7 @@ The control loop consists of the following major steps each sampling instant:
    The Extended Kalman Filter updates estimates of SOC and electrochemical states using the ROM output and measured voltage. Initialization is performed by [`initKF.m`](src/UTILITY/initKF.m), and state updates are computed in [`iterEKF.m`](src/UTILITY/iterEKF.m).
 
 3. **Model Linearization (EKFmatsHandler)**
-      EKF-estimated states are used to select the closest local ROM (no blending) and linearize the system. The [`EKFmatsHandler.m`](src/MPC-EKF4FastCharge/EKFmatsHandler.m) function returns the required state-space matrices, prepared for constraint handling before Δu augmentation.
+      EKF-estimated states are used to select the closest local ROM and linearize the system. The [`EKFmatsHandler.m`](src/MPC-EKF4FastCharge/EKFmatsHandler.m) function returns the required state-space matrices, prepared for constraint handling before Δu augmentation.
 
 4. **Prediction Matrices (predMat)**
    The function [`predMat.m`](src/MPC-EKF4FastCharge/predMat.m) builds horizon-based prediction matrices (Φ and G) for SOC, voltage, and side-reaction overpotential.
@@ -58,9 +56,11 @@ The control loop consists of the following major steps each sampling instant:
 
 ---
 
-## Results
+## Results and Simulations
 
-Simulations highlight the ability of the framework to enforce electrochemical constraints while accelerating charging from **10% to 95% SOC**.
+The code was **tested using the NMC30 (3.7 V, 30 Ah) lithium-ion cell**, based on the **physics-based Reduced-Order Model (ROM)** developed by **Prof. Gregory Plett and Prof. Scott Trimboli** [1].
+
+Simulations demonstrate the ability of the proposed framework to **enforce electrochemical constraints** while **accelerating charging from 10 % to 95 % SOC**.
 The following operating limits were applied:
 
 * Maximum charge current: **2C (≈ 59.72 A)**
