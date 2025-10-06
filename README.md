@@ -58,7 +58,7 @@ The control loop consists of the following major steps each sampling instant:
 
 ## Results and Simulations
 
-The code was **tested using the NMC30 (3.7 V, 30 Ah) lithium-ion cell**, based on the **physics-based Reduced-Order Model (ROM)** developed by **Prof. Gregory Plett and Prof. Scott Trimboli** [1].
+The control algorithm was **tested using the NMC30 (3.7 V, 30 Ah) lithium-ion cell**, based on the **physics-based Reduced-Order Model (ROM)** developed by **Prof. Gregory Plett and Prof. Scott Trimboli** [1].
 
 Simulations demonstrate the ability of the proposed framework to **enforce electrochemical constraints** while **accelerating charging from 10 % to 95 % SOC**.
 The following operating limits were applied:
